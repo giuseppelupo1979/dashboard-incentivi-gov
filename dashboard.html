@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Incentivi.gov v2.0</title>
+<title>Dashboard Incentivi.gov v2.1</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -256,6 +256,15 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 .spinner{width:40px;height:40px;border:4px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* SCADENZA FILTER */
+.scad-section{padding:12px 0;border-bottom:1px solid var(--border)}
+.scad-label{font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text)}
+.scad-group{display:flex;flex-direction:column;gap:5px}
+.scad-opt{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer;padding:5px 8px;border-radius:7px;border:1.5px solid transparent;transition:all var(--t)}
+.scad-opt input[type=radio]{accent-color:var(--primary);cursor:pointer;flex-shrink:0}
+.scad-opt.active,.scad-opt:has(input:checked){background:var(--primary-l);color:var(--primary);border-color:#ddd6fe;font-weight:600}
+.scad-opt:hover{background:var(--surface2)}
+
 /* RESPONSIVE */
 @media(max-width:1100px){.cards-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:860px){
@@ -278,7 +287,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
     <div class="logo">
       <div class="logo-icon">I</div>
       Dashboard Incentivi.gov
-      <span class="v-badge">v2.0</span>
+      <span class="v-badge">v2.1</span>
     </div>
     <div class="header-right">
       <span class="header-count hidden" id="header-count"></span>
@@ -438,7 +447,7 @@ function getCatColor(obj=[]) {
 const S = {
   data:[],filtered:[],page:0,pageSize:18,
   selectedIds: new Set(),
-  filters:{query:"",excludeExpired:false,tipologiaSoggetto:[],dimensioni:[],obiettivoFinalita:[],formaAgevolazione:[],settoreAttivita:[],regioni:[],ambitoTerritoriale:[],importoMin:0,importoMax:0},
+  filters:{query:"",excludeExpired:false,scadenzaFilter:"all",tipologiaSoggetto:[],dimensioni:[],obiettivoFinalita:[],formaAgevolazione:[],settoreAttivita:[],regioni:[],ambitoTerritoriale:[],importoMin:0,importoMax:0},
   opts:{},maxImporto:0,
   sectOpen:{importo:true,ts:true,dim:true,obj:true,fa:true,sa:false,reg:true,amb:true},
 };
@@ -449,7 +458,7 @@ function fmtCurFull(v){const n=parseInt(v,10);if(!v||isNaN(n)||n===0)return"—"
 function fmtDate(s,full=false){if(!s)return"—";try{const d=new Date(s);if(isNaN(d))return"—";if(full)return d.toLocaleDateString("it-IT",{day:"2-digit",month:"long",year:"numeric"});return d.toLocaleDateString("it-IT",{day:"2-digit",month:"short",year:"2-digit"});}catch{return"—";}}
 function deadlineInfo(s){if(!s)return null;try{const d=new Date(s);if(isNaN(d))return null;const diff=Math.round((d-new Date())/86400000);const expired=diff<0;const days=Math.abs(diff);let label,cls;if(expired){label="Scaduto";cls="sc-exp";}else if(days===0){label="Oggi";cls="sc-warn";}else if(days<=30){label=days+" gg";cls="sc-warn";}else{label=fmtDate(s);cls="sc-ok";}return{expired,days,diff,label,cls,dateStr:fmtDate(s,true)};}catch{return null;}}
 function uniqueVals(field){const set=new Set();for(const item of S.data){const v=item[field];if(Array.isArray(v))v.forEach(x=>x&&set.add(x));else if(typeof v==="string"&&v)set.add(v);}return[...set].sort();}
-function countActive(){const f=S.filters;let n=0;if(f.query)n++;if(f.excludeExpired)n++;if(f.tipologiaSoggetto.length)n++;if(f.dimensioni.length)n++;if(f.obiettivoFinalita.length)n++;if(f.formaAgevolazione.length)n++;if(f.settoreAttivita.length)n++;if(f.regioni.length)n++;if(f.ambitoTerritoriale.length)n++;if(f.importoMax>0)n++;return n;}
+function countActive(){const f=S.filters;let n=0;if(f.query)n++;if(f.excludeExpired)n++;if(f.tipologiaSoggetto.length)n++;if(f.dimensioni.length)n++;if(f.obiettivoFinalita.length)n++;if(f.formaAgevolazione.length)n++;if(f.settoreAttivita.length)n++;if(f.regioni.length)n++;if(f.ambitoTerritoriale.length)n++;if(f.importoMax>0)n++;if(f.scadenzaFilter!="all")n++;return n;}
 function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function showToast(msg,dur=2800){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),dur);}
@@ -470,7 +479,7 @@ function applyFilters(){
   const f=S.filters;
   S.filtered=S.data.filter(item=>{
     if(f.query){const q=f.query.toLowerCase();const blob=[item.Titolo,item.Soggetto_Concedente,item.Descrizione,...(item.Tipologia_Soggetto||[]),...(item.Obiettivo_Finalita||[]),...(item.Settore_Attivita||[]),...(item.Regioni||[]),...(item.Forma_agevolazione||[]),...(item.Dimensioni||[])].join(" ").toLowerCase();if(!blob.includes(q))return false;}
-    if(f.excludeExpired&&item.Data_chiusura){try{if(new Date(item.Data_chiusura)<new Date())return false;}catch{}}
+    if(f.excludeExpired&&item.Data_chiusura){try{if(new Date(item.Data_chiusura)<new Date())return false;}catch{}}if(f.scadenzaFilter==="con"&&!item.Data_chiusura)return false;if(f.scadenzaFilter==="senza"&&item.Data_chiusura)return false;
     const chk=(arr,field)=>{if(!arr.length)return true;const vals=(item[field]||[]).map(s=>s.toLowerCase());return arr.some(s=>vals.includes(s.toLowerCase()));};
     if(!chk(f.tipologiaSoggetto,"Tipologia_Soggetto"))return false;
     if(!chk(f.dimensioni,"Dimensioni"))return false;
@@ -509,7 +518,7 @@ function buildImportoHTML(isMob=false){
   function fS(n){if(n>=1e6)return"€"+(n/1e6).toFixed(1)+"M";if(n>=1e3)return"€"+(n/1e3).toFixed(0)+"K";return"€"+n;}
   return`<div class="importo-section"><div class="importo-header" onclick="toggleSection('importo','${p}iw')"><span class="sh">Importo agevolazione ${S.filters.importoMax>0?'<span class="fs-badge">✓</span>':""}</span><span class="fs-chevron ${open?"open":""}">${SVGS.chevDown}</span></div><div id="${p}iw" style="${open?"":"display:none"}"><div class="importo-inputs"><div class="importo-field"><label>Min (€)</label><input type="number" min="0" max="${maxI}" step="1000" value="${minV||""}" placeholder="0" onchange="updateImporto('${p}')"></div><div class="importo-field"><label>Max (€)</label><input type="number" min="0" max="${maxI}" step="1000" value="${maxV!==maxI?maxV:""}" placeholder="${fS(maxI)}" onchange="updateImporto('${p}')"></div></div><div class="dual-range" id="${p}dr"><div class="range-track"><div class="range-fill" id="${p}rf"></div></div><input type="range" id="${p}rmin" min="0" max="${maxI}" step="1000" value="${minV}" oninput="onRangeInput('${p}')"><input type="range" id="${p}rmax" min="0" max="${maxI}" step="1000" value="${S.filters.importoMax>0?S.filters.importoMax:maxI}" oninput="onRangeInput('${p}')"></div><div class="range-labels"><span id="${p}rl_min">${fS(minV||0)}</span><span id="${p}rl_max">${fS(maxV)}</span></div>${S.filters.importoMax>0?`<button class="btn-link" style="font-size:11px;margin-top:4px" onclick="clearImporto()">Rimuovi filtro</button>`:""}</div></div>`;
 }
-function buildToggleHTML(){return`<label class="toggle-row"><input type="checkbox" ${S.filters.excludeExpired?"checked":""} onchange="S.filters.excludeExpired=this.checked;filtersChanged()"><div class="toggle-text"><div class="tl">Solo bandi attivi</div><div class="ts">Escludi i bandi con scadenza passata</div></div></label>`;}
+function buildToggleHTML(){return`<label class="toggle-row"><input type="checkbox" ${S.filters.excludeExpired?"checked":""} onchange="S.filters.excludeExpired=this.checked;filtersChanged()"><div class="toggle-text"><div class="tl">Solo bandi attivi</div><div class="ts">Escludi i bandi con scadenza passata</div></div></label><div class="scad-section"><div class="scad-label">Scadenza indicata</div><div class="scad-group"><label class="scad-opt ${S.filters.scadenzaFilter==='all'?'active':''}"><input type="radio" name="scadF" value="all" ${S.filters.scadenzaFilter==='all'?'checked':''} onchange="S.filters.scadenzaFilter='all';filtersChanged()"> Tutti</label><label class="scad-opt ${S.filters.scadenzaFilter==='con'?'active':''}"><input type="radio" name="scadF" value="con" ${S.filters.scadenzaFilter==='con'?'checked':''} onchange="S.filters.scadenzaFilter='con';filtersChanged()"> Con scadenza</label><label class="scad-opt ${S.filters.scadenzaFilter==='senza'?'active':''}"><input type="radio" name="scadF" value="senza" ${S.filters.scadenzaFilter==='senza'?'checked':''} onchange="S.filters.scadenzaFilter='senza';filtersChanged()"> Senza scadenza</label></div></div>`;}"
 function renderSidebar(){document.getElementById("sidebar-body").innerHTML=buildToggleHTML()+buildImportoHTML(false)+buildSectionHTML("ts","Tipologia soggetto","Tipologia_Soggetto","tipologiaSoggetto")+buildSectionHTML("dim","Dimensione impresa","Dimensioni","dimensioni")+buildSectionHTML("obj","Obiettivo / Finalità","Obiettivo_Finalita","obiettivoFinalita")+buildSectionHTML("fa","Forma agevolazione","Forma_agevolazione","formaAgevolazione")+buildSectionHTML("sa","Settore attività","Settore_Attivita","settoreAttivita")+buildSectionHTML("reg","Regioni","Regioni","regioni")+buildSectionHTML("amb","Ambito territoriale","Ambito_territoriale","ambitoTerritoriale");updateRangeFill("d_");}
 function renderMobileSidebar(){document.getElementById("mob-body").innerHTML=buildToggleHTML()+buildImportoHTML(true)+buildSectionHTML("ts","Tipologia soggetto","Tipologia_Soggetto","tipologiaSoggetto",true)+buildSectionHTML("dim","Dimensione impresa","Dimensioni","dimensioni",true)+buildSectionHTML("obj","Obiettivo / Finalità","Obiettivo_Finalita","obiettivoFinalita",true)+buildSectionHTML("fa","Forma agevolazione","Forma_agevolazione","formaAgevolazione",true)+buildSectionHTML("sa","Settore attività","Settore_Attivita","settoreAttivita",true)+buildSectionHTML("reg","Regioni","Regioni","regioni",true)+buildSectionHTML("amb","Ambito territoriale","Ambito_territoriale","ambitoTerritoriale",true);updateRangeFill("m_");}
 
@@ -517,7 +526,7 @@ function renderMobileSidebar(){document.getElementById("mob-body").innerHTML=bui
 function renderChips(){
   const f=S.filters,chips=[];
   const add=(label,fn)=>chips.push({label,fn});
-  if(f.excludeExpired)add("Solo attivi",()=>{f.excludeExpired=false;filtersChanged();});
+  if(f.scadenzaFilter==="con")add("Con scadenza",()=>{f.scadenzaFilter="all";filtersChanged();});if(f.scadenzaFilter==="senza")add("Senza scadenza",()=>{f.scadenzaFilter="all";filtersChanged();});if(f.excludeExpired)add("Solo attivi",()=>{f.excludeExpired=false;filtersChanged();});
   if(f.importoMax>0)add(`Importo ≤ ${fmtCur(f.importoMax)}`,()=>{f.importoMin=0;f.importoMax=0;filtersChanged();});
   for(const key of["tipologiaSoggetto","dimensioni","obiettivoFinalita","formaAgevolazione","settoreAttivita","regioni","ambitoTerritoriale"])for(const v of f[key])add(v,()=>{f[key]=f[key].filter(x=>x!==v);filtersChanged();});
   document.getElementById("chips-row").innerHTML=chips.map((c,i)=>`<span class="chip">${esc(c.label)}<button class="chip-x" onclick="chipRemove(${i})">${SVGS.close}</button></span>`).join("");
@@ -627,7 +636,7 @@ function updateRangeFill(prefix){const rmin=document.getElementById(`${prefix}rm
 window.clearImporto=function(){S.filters.importoMin=0;S.filters.importoMax=0;filtersChanged();};
 const debouncedFilter=debounce(filtersChanged,50);
 function filtersChanged(){applyFilters();renderChips();renderCards();renderSidebar();}
-window.resetAll=function(){S.filters={query:"",excludeExpired:false,tipologiaSoggetto:[],dimensioni:[],obiettivoFinalita:[],formaAgevolazione:[],settoreAttivita:[],regioni:[],ambitoTerritoriale:[],importoMin:0,importoMax:0};document.getElementById("search-input").value="";document.getElementById("search-clear").classList.add("hidden");filtersChanged();};
+window.resetAll=function(){S.filters={query:"",excludeExpired:false,scadenzaFilter:"all",tipologiaSoggetto:[],dimensioni:[],obiettivoFinalita:[],formaAgevolazione:[],settoreAttivita:[],regioni:[],ambitoTerritoriale:[],importoMin:0,importoMax:0};document.getElementById("search-input").value="";document.getElementById("search-clear").classList.add("hidden");filtersChanged();};
 
 /* ===== POWERPOINT EXPORT ===== */
 window.exportPPT = async function() {
