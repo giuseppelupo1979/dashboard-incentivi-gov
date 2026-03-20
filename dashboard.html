@@ -265,6 +265,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 .scad-opt.active,.scad-opt:has(input:checked){background:var(--primary-l);color:var(--primary);border-color:#ddd6fe;font-weight:600}
 .scad-opt:hover{background:var(--surface2)}
 
+/* LOADING OVERLAY */
+.loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;opacity:0;pointer-events:none;transition:opacity 200ms}
+.loading-overlay.show{opacity:1;pointer-events:all}
+.ld-spinner{width:48px;height:48px;border:5px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .75s linear infinite}
+.ld-text{font-size:16px;font-weight:700;color:var(--text)}
+.ld-sub{font-size:13px;color:var(--muted)}
+
 /* RESPONSIVE */
 @media(max-width:1100px){.cards-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:860px){
@@ -320,8 +327,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
         <path d="M12 3v13M8 7l4-4 4 4"/>
       </svg>
       <p>Trascina qui <strong>opendata-export.json</strong><br>oppure clicca per selezionarlo</p>
-      <button class="pick-btn" id="pick-btn">Scegli file</button>
-      <input type="file" accept=".json,application/json" id="file-input" style="display:none">
+      <label class="pick-btn" for="file-input">Scegli file</label>
+      <input type="file" accept=".json,application/json" id="file-input" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none">
     </div>
   </div>
 
@@ -378,6 +385,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="ld-spinner"></div>
+  <div class="ld-text">Caricamento in corso…</div>
+  <div class="ld-sub" id="loading-sub">Lettura del file JSON</div>
+</div>
 
 <!-- Detail Sheet -->
 <div class="overlay" id="overlay">
@@ -518,7 +532,7 @@ function buildImportoHTML(isMob=false){
   function fS(n){if(n>=1e6)return"€"+(n/1e6).toFixed(1)+"M";if(n>=1e3)return"€"+(n/1e3).toFixed(0)+"K";return"€"+n;}
   return`<div class="importo-section"><div class="importo-header" onclick="toggleSection('importo','${p}iw')"><span class="sh">Importo agevolazione ${S.filters.importoMax>0?'<span class="fs-badge">✓</span>':""}</span><span class="fs-chevron ${open?"open":""}">${SVGS.chevDown}</span></div><div id="${p}iw" style="${open?"":"display:none"}"><div class="importo-inputs"><div class="importo-field"><label>Min (€)</label><input type="number" min="0" max="${maxI}" step="1000" value="${minV||""}" placeholder="0" onchange="updateImporto('${p}')"></div><div class="importo-field"><label>Max (€)</label><input type="number" min="0" max="${maxI}" step="1000" value="${maxV!==maxI?maxV:""}" placeholder="${fS(maxI)}" onchange="updateImporto('${p}')"></div></div><div class="dual-range" id="${p}dr"><div class="range-track"><div class="range-fill" id="${p}rf"></div></div><input type="range" id="${p}rmin" min="0" max="${maxI}" step="1000" value="${minV}" oninput="onRangeInput('${p}')"><input type="range" id="${p}rmax" min="0" max="${maxI}" step="1000" value="${S.filters.importoMax>0?S.filters.importoMax:maxI}" oninput="onRangeInput('${p}')"></div><div class="range-labels"><span id="${p}rl_min">${fS(minV||0)}</span><span id="${p}rl_max">${fS(maxV)}</span></div>${S.filters.importoMax>0?`<button class="btn-link" style="font-size:11px;margin-top:4px" onclick="clearImporto()">Rimuovi filtro</button>`:""}</div></div>`;
 }
-function buildToggleHTML(){return`<label class="toggle-row"><input type="checkbox" ${S.filters.excludeExpired?"checked":""} onchange="S.filters.excludeExpired=this.checked;filtersChanged()"><div class="toggle-text"><div class="tl">Solo bandi attivi</div><div class="ts">Escludi i bandi con scadenza passata</div></div></label><div class="scad-section"><div class="scad-label">Scadenza indicata</div><div class="scad-group"><label class="scad-opt ${S.filters.scadenzaFilter==='all'?'active':''}"><input type="radio" name="scadF" value="all" ${S.filters.scadenzaFilter==='all'?'checked':''} onchange="S.filters.scadenzaFilter='all';filtersChanged()"> Tutti</label><label class="scad-opt ${S.filters.scadenzaFilter==='con'?'active':''}"><input type="radio" name="scadF" value="con" ${S.filters.scadenzaFilter==='con'?'checked':''} onchange="S.filters.scadenzaFilter='con';filtersChanged()"> Con scadenza</label><label class="scad-opt ${S.filters.scadenzaFilter==='senza'?'active':''}"><input type="radio" name="scadF" value="senza" ${S.filters.scadenzaFilter==='senza'?'checked':''} onchange="S.filters.scadenzaFilter='senza';filtersChanged()"> Senza scadenza</label></div></div>`;}"
+function buildToggleHTML(){return`<label class="toggle-row"><input type="checkbox" ${S.filters.excludeExpired?"checked":""} onchange="S.filters.excludeExpired=this.checked;filtersChanged()"><div class="toggle-text"><div class="tl">Solo bandi attivi</div><div class="ts">Escludi i bandi con scadenza passata</div></div></label><div class="scad-section"><div class="scad-label">Scadenza indicata</div><div class="scad-group"><label class="scad-opt ${S.filters.scadenzaFilter==='all'?'active':''}"><input type="radio" name="scadF" value="all" ${S.filters.scadenzaFilter==='all'?'checked':''} onchange="S.filters.scadenzaFilter='all';filtersChanged()"> Tutti</label><label class="scad-opt ${S.filters.scadenzaFilter==='con'?'active':''}"><input type="radio" name="scadF" value="con" ${S.filters.scadenzaFilter==='con'?'checked':''} onchange="S.filters.scadenzaFilter='con';filtersChanged()"> Con scadenza</label><label class="scad-opt ${S.filters.scadenzaFilter==='senza'?'active':''}"><input type="radio" name="scadF" value="senza" ${S.filters.scadenzaFilter==='senza'?'checked':''} onchange="S.filters.scadenzaFilter='senza';filtersChanged()"> Senza scadenza</label></div></div>`;}
 function renderSidebar(){document.getElementById("sidebar-body").innerHTML=buildToggleHTML()+buildImportoHTML(false)+buildSectionHTML("ts","Tipologia soggetto","Tipologia_Soggetto","tipologiaSoggetto")+buildSectionHTML("dim","Dimensione impresa","Dimensioni","dimensioni")+buildSectionHTML("obj","Obiettivo / Finalità","Obiettivo_Finalita","obiettivoFinalita")+buildSectionHTML("fa","Forma agevolazione","Forma_agevolazione","formaAgevolazione")+buildSectionHTML("sa","Settore attività","Settore_Attivita","settoreAttivita")+buildSectionHTML("reg","Regioni","Regioni","regioni")+buildSectionHTML("amb","Ambito territoriale","Ambito_territoriale","ambitoTerritoriale");updateRangeFill("d_");}
 function renderMobileSidebar(){document.getElementById("mob-body").innerHTML=buildToggleHTML()+buildImportoHTML(true)+buildSectionHTML("ts","Tipologia soggetto","Tipologia_Soggetto","tipologiaSoggetto",true)+buildSectionHTML("dim","Dimensione impresa","Dimensioni","dimensioni",true)+buildSectionHTML("obj","Obiettivo / Finalità","Obiettivo_Finalita","obiettivoFinalita",true)+buildSectionHTML("fa","Forma agevolazione","Forma_agevolazione","formaAgevolazione",true)+buildSectionHTML("sa","Settore attività","Settore_Attivita","settoreAttivita",true)+buildSectionHTML("reg","Regioni","Regioni","regioni",true)+buildSectionHTML("amb","Ambito territoriale","Ambito_territoriale","ambitoTerritoriale",true);updateRangeFill("m_");}
 
@@ -794,24 +808,39 @@ function buildSlide(pptx, item) {
 }
 
 /* ===== FILE LOAD ===== */
+function showLoading(msg){const ov=document.getElementById("loading-overlay");document.getElementById("loading-sub").textContent=msg||"";ov.classList.add("show");}
+function hideLoading(){document.getElementById("loading-overlay").classList.remove("show");}
 function loadFile(file){
+  if(!file)return;
+  if(!file.name.match(/\.json$/i)&&file.type&&!file.type.includes("json")){alert("Seleziona un file .json");return;}
+  showLoading("Lettura di "+file.name+" ("+Math.round(file.size/1024/1024*10)/10+" MB)…");
   const reader=new FileReader();
   reader.onload=e=>{
-    try{
-      const json=JSON.parse(e.target.result);
-      S.data=Array.isArray(json)?json:[json];
-      S.filtered=S.data;
-      S.opts={Tipologia_Soggetto:uniqueVals("Tipologia_Soggetto"),Dimensioni:uniqueVals("Dimensioni"),Obiettivo_Finalita:uniqueVals("Obiettivo_Finalita"),Forma_agevolazione:uniqueVals("Forma_agevolazione"),Settore_Attivita:uniqueVals("Settore_Attivita"),Regioni:uniqueVals("Regioni"),Ambito_territoriale:uniqueVals("Ambito_territoriale")};
-      S.maxImporto=Math.max(0,...S.data.map(d=>parseInt(d.Agevolazione_Concedibile_max||"0",10)).filter(n=>!isNaN(n)));
-      document.getElementById("upload-screen").classList.add("hidden");
-      document.getElementById("dashboard").classList.remove("hidden");
-      document.getElementById("header-count").textContent=S.data.length.toLocaleString("it-IT")+" incentivi";
-      document.getElementById("header-count").classList.remove("hidden");
-      document.getElementById("change-file-btn").classList.remove("hidden");
-      renderStats();renderSidebar();renderChips();renderCards();
-    }catch(err){alert("Errore nel parsing del file JSON:\n"+err.message);}
+    document.getElementById("loading-sub").textContent="Parsing JSON…";
+    setTimeout(()=>{
+      try{
+        const json=JSON.parse(e.target.result);
+        S.data=Array.isArray(json)?json:[json];
+        if(S.data.length===0){hideLoading();alert("Il file non contiene bandi.");return;}
+        S.filtered=S.data;
+        document.getElementById("loading-sub").textContent="Preparazione filtri ("+S.data.length.toLocaleString("it-IT")+" bandi)…";
+        setTimeout(()=>{
+          S.opts={Tipologia_Soggetto:uniqueVals("Tipologia_Soggetto"),Dimensioni:uniqueVals("Dimensioni"),Obiettivo_Finalita:uniqueVals("Obiettivo_Finalita"),Forma_agevolazione:uniqueVals("Forma_agevolazione"),Settore_Attivita:uniqueVals("Settore_Attivita"),Regioni:uniqueVals("Regioni"),Ambito_territoriale:uniqueVals("Ambito_territoriale")};
+          const vals=S.data.map(d=>parseInt(d.Agevolazione_Concedibile_max||"0",10)).filter(n=>!isNaN(n)&&n>0);
+          S.maxImporto=vals.length?vals.reduce((a,b)=>a>b?a:b,0):0;
+          document.getElementById("upload-screen").classList.add("hidden");
+          document.getElementById("dashboard").classList.remove("hidden");
+          document.getElementById("header-count").textContent=S.data.length.toLocaleString("it-IT")+" incentivi";
+          document.getElementById("header-count").classList.remove("hidden");
+          document.getElementById("change-file-btn").classList.remove("hidden");
+          renderStats();renderSidebar();renderChips();renderCards();
+          hideLoading();
+        },30);
+      }catch(err){hideLoading();alert("Errore nel parsing del file JSON:\n"+err.message);}
+    },30);
   };
-  reader.readAsText(file);
+  reader.onerror=()=>{hideLoading();alert("Errore nella lettura del file. Riprova.");};
+  reader.readAsText(file,"UTF-8");
 }
 
 /* ===== INIT ===== */
@@ -820,8 +849,8 @@ function init(){
   zone.addEventListener("dragover",e=>{e.preventDefault();zone.classList.add("dragover")});
   zone.addEventListener("dragleave",()=>zone.classList.remove("dragover"));
   zone.addEventListener("drop",e=>{e.preventDefault();zone.classList.remove("dragover");if(e.dataTransfer.files[0])loadFile(e.dataTransfer.files[0]);});
-  zone.addEventListener("click",()=>fileInput.click());
-  document.getElementById("pick-btn").addEventListener("click",e=>{e.stopPropagation();fileInput.click();});
+  zone.addEventListener("click",(e)=>{if(e.target.tagName!=="LABEL"&&e.target.tagName!=="INPUT")fileInput.click();});
+  
   fileInput.addEventListener("change",e=>{if(e.target.files[0])loadFile(e.target.files[0]);});
   document.getElementById("change-file-btn").addEventListener("click",()=>{document.getElementById("dashboard").classList.add("hidden");document.getElementById("upload-screen").classList.remove("hidden");document.getElementById("header-count").classList.add("hidden");document.getElementById("change-file-btn").classList.add("hidden");S.data=[];S.filtered=[];S.selectedIds.clear();updateSelectionUI();window.resetAll&&window.resetAll();fileInput.value="";});
   const searchInput=document.getElementById("search-input"),searchClear=document.getElementById("search-clear");
